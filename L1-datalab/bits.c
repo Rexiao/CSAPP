@@ -149,7 +149,7 @@ int bitXor(int x, int y) {
     // ~x&y | x&~y
     int a = ~x & y;
     int b = x & ~y;
-    return ~(~a & ~b);
+    return ~(~a & ~b);  // = a | b
 }
 /*
  * tmin - return minimum two's complement integer
@@ -158,7 +158,7 @@ int bitXor(int x, int y) {
  *   Rating: 1
  */
 int tmin(void) {
-    return 2;
+    return 1 << 31;
 }
 // 2
 /*
@@ -169,7 +169,14 @@ int tmin(void) {
  *   Rating: 1
  */
 int isTmax(int x) {
-    return 2;
+    // regular case
+    // only when x = 0x7ffffff, (x + 1)  ~ x = 0xffffffff
+    // + 1 makes overflow to 0
+    int f1 = ((x + 1) ^ x) + 1;
+    // special case, when x = 0xffffffff
+    // 0xffffffff + 1 = 0
+    int f2 = x + 1;
+    return !!f2 & !f1;
 }
 /*
  * allOddBits - return 1 if all odd-numbered bits in word set to 1
@@ -180,7 +187,14 @@ int isTmax(int x) {
  *   Rating: 2
  */
 int allOddBits(int x) {
-    return 2;
+    // f1 to f4 is four segments of x
+    int f1 = (x & 0xaa);
+    int f2 = ((x >> 8) & 0xaa);
+    int f3 = ((x >> 16) & 0xaa);
+    int f4 = ((x >> 24) & 0xaa);
+    // only if f5 = f1 & f2 & f3 & f4 = 0xaa makes f5 ^ 0xaa 0
+    int f5 = f1 & f2 & f3 & f4;
+    return !(f5 ^ 0xaa);
 }
 /*
  * negate - return -x
@@ -190,7 +204,7 @@ int allOddBits(int x) {
  *   Rating: 2
  */
 int negate(int x) {
-    return 2;
+    return ~x + 1;
 }
 // 3
 /*
@@ -203,7 +217,11 @@ int negate(int x) {
  *   Rating: 3
  */
 int isAsciiDigit(int x) {
-    return 2;
+    int rest = (x >> 4) ^ 3;  // rest should be 3, so 3 ^ 3 makes 0
+    int masked = x & 0xf;
+    int l8 = !(masked & 0x8);   // check if 4th digit is 1
+    int le2 = !(masked & 0x6);  // check if 2rd and 3th digit is 1
+    return (!rest) & (l8 | (le2));
 }
 /*
  * conditional - same as x ? y : z
@@ -213,7 +231,11 @@ int isAsciiDigit(int x) {
  *   Rating: 3
  */
 int conditional(int x, int y, int z) {
-    return 2;
+    int neg_1 = ~1 + 1;
+    int cond_mask = (!!x) + neg_1;
+    // if !!x = 0, cond_mask = 0xffffffff
+    // if !!x = 1, cond_mask = 0x0
+    return (z & cond_mask) | ((~cond_mask) & y);
 }
 /*
  * isLessOrEqual - if x <= y  then return 1, else return 0
@@ -223,7 +245,28 @@ int conditional(int x, int y, int z) {
  *   Rating: 3
  */
 int isLessOrEqual(int x, int y) {
-    return 2;
+    int is_x_neg = x >> 31;
+    int is_y_neg = y >> 31;
+    int unsign_mask = ~(0x1 << 31);
+    int unsigned_x = x & unsign_mask;
+    int unsigned_y = y & unsign_mask;
+    // if x y has different sign, just return
+    // x_neg  1 1 0 0
+    // y_neg  1 0 1 0
+    // result 0 1 0 1
+    int case2 = is_x_neg & (!is_y_neg);
+
+    // if all positive, compare ux and uy
+    // if all negative, reverse comparing result
+    int neg_unsigned_y = ~unsigned_y + 1;
+    // x - y < 0
+    int x_minus_y = unsigned_x + neg_unsigned_y;
+    int smaller_than_zero = (x_minus_y >> 31) & 0x1;
+    int case3 = (!(is_x_neg ^ is_y_neg)) & smaller_than_zero;
+    // if x y equal, return 1
+    int case4 = !(x ^ y);
+    // printf("$$$$$$$$$%d$$$$$$$$$\n", x_minus_y);
+    return case2 | case3 | case4;
 }
 // 4
 /*
@@ -235,7 +278,17 @@ int isLessOrEqual(int x, int y) {
  *   Rating: 4
  */
 int logicalNeg(int x) {
-    return 2;
+    int all_ones = ~x;
+    int sign_mask = 1 << 31;             // 0x10000000
+    int unsign_mask = sign_mask + (~0);  // 0x7ffffffff
+    // printf("unsign_mask:%x\n", unsign_mask);
+    int t1 = all_ones & unsign_mask;
+    int t2 = t1 + 1;
+    // printf("x:%d ----- %x %x %x\n", x, (~x) >> 31, t2, (t2 & (~0)) >> 31);
+    // int k = -2147483648;
+    // int k2 = 0x80000000;
+    // printf("x:%d ----- %x\n", x, k ==);
+    return (((~x) & t2) >> 31) & 0x1;
 }
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
@@ -250,6 +303,28 @@ int logicalNeg(int x) {
  *  Rating: 4
  */
 int howManyBits(int x) {
+    // // convert negative to positive
+    // int sign_bit = x >> 31;
+    // int all_ones = ~0;
+    // // if negative, 0xffffffff, if positive, 0x0
+    // int neg_mask = sign_bit + all_ones;
+    // // if negative, x = ~x + 1. If positive, x = x
+    // unsigned transformed_x = (neg_mask & (~x + 1)) | ((~neg_mask) & x);
+    // int mask = 0x55555555;
+    // int sum1 = (transformed_x & mask) + (transformed_x >> 16)&;
+    // int mask2 = ___________;
+    // int halfSum = ___________;
+    // int mask3 = ___________;
+    // // bit smearing
+    // transformed_x = transformed_x | (transformed_x >> 16);
+    // transformed_x = transformed_x | (transformed_x >> 8);
+    // transformed_x = transformed_x | (transformed_x >> 4);
+    // transformed_x = transformed_x | (transformed_x >> 2);
+    // transformed_x = transformed_x | (transformed_x >> 1);
+    // count bits
+
+    // special case:0?
+    // don't worry 0x80000000, it transforms to 0xffffffff
     return 0;
 }
 // float
