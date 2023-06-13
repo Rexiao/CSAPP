@@ -279,15 +279,17 @@ int isLessOrEqual(int x, int y) {
  */
 int logicalNeg(int x) {
     int all_ones = ~x;
-    int sign_mask = 1 << 31;             // 0x10000000
-    int unsign_mask = sign_mask + (~0);  // 0x7ffffffff
-    // printf("unsign_mask:%x\n", unsign_mask);
-    int t1 = all_ones & unsign_mask;
+    int sign_mask = 1 << 31;  // 0x10000000
+    // int unsign_mask = sign_mask + (~0);  // 0x7ffffffff
+    // // printf("unsign_mask:%x\n", unsign_mask);
+    // int t1 = all_ones & unsign_mask;
+    int t1 = all_ones ^ sign_mask;
     int t2 = t1 + 1;
-    // printf("x:%d ----- %x %x %x\n", x, (~x) >> 31, t2, (t2 & (~0)) >> 31);
+    // printf("x:%d ----- %x %x %x %x\n", x, (~x) >> 31, t1, t2, t2 >> (15 + 16));
     // int k = -2147483648;
     // int k2 = 0x80000000;
     // printf("x:%d ----- %x\n", x, k ==);
+    // printf("x:%d t1: %x t2:%x (~x):%x,  t2:%x\n", x, t1, t2, ~x, t2 >> 31);
     return (((~x) & t2) >> 31) & 0x1;
 }
 /* howManyBits - return the minimum number of bits required to represent x in
@@ -303,29 +305,60 @@ int logicalNeg(int x) {
  *  Rating: 4
  */
 int howManyBits(int x) {
-    // // convert negative to positive
-    // int sign_bit = x >> 31;
-    // int all_ones = ~0;
-    // // if negative, 0xffffffff, if positive, 0x0
-    // int neg_mask = sign_bit + all_ones;
-    // // if negative, x = ~x + 1. If positive, x = x
-    // unsigned transformed_x = (neg_mask & (~x + 1)) | ((~neg_mask) & x);
-    // int mask = 0x55555555;
-    // int sum1 = (transformed_x & mask) + (transformed_x >> 16)&;
-    // int mask2 = ___________;
-    // int halfSum = ___________;
-    // int mask3 = ___________;
-    // // bit smearing
-    // transformed_x = transformed_x | (transformed_x >> 16);
-    // transformed_x = transformed_x | (transformed_x >> 8);
-    // transformed_x = transformed_x | (transformed_x >> 4);
-    // transformed_x = transformed_x | (transformed_x >> 2);
-    // transformed_x = transformed_x | (transformed_x >> 1);
+    // convert negative to positive
+    int sign_bit = (x >> 31) & 0x1;
+    int all_ones = ~0;
+    // printf("sign bit:%x\n", sign_bit);
+    // if negative, 0xffffffff, if positive, 0x0
+    int pos_mask = sign_bit + all_ones;
+    // if negative, x = ~x + 1. If positive, x = x
+    int transformed_x = ((~pos_mask) & (~x)) | ((pos_mask)&x);
+    int mask = 0x55;
+    int sum1 = 0;
+    int mask2 = 0x33;
+    int sum2 = 0;
+    int mask3 = 0x0f;  // 0x0f0f0f0f
+    int sum3 = 0;
+    int mask4 = 0xff;  // 0x00ff00ff
+    int mask5 = 0xff;  // 0x0000ffff
+    // bit smearing
+    mask = (mask << 8) | mask;
+    mask = (mask << 16) | mask;
+    mask2 = (mask2 << 8) | mask2;
+    mask2 = (mask2 << 16) | mask2;
+    mask3 = (mask3 << 8) | mask3;
+    mask3 = (mask3 << 16) | mask3;
+    mask4 = (mask4 << 16) | mask4;
+    mask5 = (mask4 >> 8) | mask5;
+    // printf("%x %x %x %x %x\n", mask, mask2, mask3, mask4, mask5);
+    transformed_x = transformed_x | (transformed_x >> 16);
+    transformed_x = transformed_x | (transformed_x >> 8);
+    transformed_x = transformed_x | (transformed_x >> 4);
+    transformed_x = transformed_x | (transformed_x >> 2);
+    transformed_x = transformed_x | (transformed_x >> 1);
     // count bits
+    // printf("x: %x, transformedx:%x\n", x, transformed_x);
+    // 1010
 
+    sum1 = (transformed_x & mask) + ((transformed_x >> 1) & mask);
+    // printf("sum1:%x\n", sum1);
+    // printf("(sum1 & mask2):%x ((sum1 >> 2) & mask2):%x\n", (sum1 & mask2), ((sum1 >> 2) & mask2));
+    sum2 = (sum1 & mask2) + ((sum1 >> 2) & mask2);
+    // printf("sum2:%x\n", sum2);
+    // 0x0100 0100 0100 0100
+    sum3 = (sum2 & mask3) + ((sum2 >> 4) & mask3);
+    // printf("sum3:%x\n", sum3);
+    sum3 = (sum3 & mask4) + ((sum3 >> 8) & mask4);
+    // printf("sum3:%x\n", sum3);
+    sum3 = (sum3 & mask5) + ((sum3 >> 16) & mask5);
+    // printf("sum3:%x\n", sum3);
+
+    // if (sum3 < 32 && x != -1 && (transformed_x - 1) != ((~transformed_x) & (0x7fffffff))) {
+    //     sum3 += 1;
+    // }
     // special case:0?
     // don't worry 0x80000000, it transforms to 0xffffffff
-    return 0;
+    return sum3 + 1;
 }
 // float
 /*
