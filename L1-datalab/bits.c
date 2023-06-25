@@ -373,7 +373,40 @@ int howManyBits(int x) {
  *   Rating: 4
  */
 unsigned floatScale2(unsigned uf) {
-    return 2;
+    unsigned exp_mask = 0x7f800000;
+    unsigned frac_mask = 0x007fffff;
+    unsigned max_minus_one_exp = 0x7f000000;
+    unsigned exp_part = uf & exp_mask;
+    unsigned frac_part = uf & frac_mask;
+    unsigned sign_part = uf & 0x80000000;
+    // unsigned isnegative = uf >> 31;
+    unsigned frac_only_leftmost_1 = 0x00400000;
+    if ((exp_part == exp_mask) || ((uf << 1) == 0)) {
+        // if uf overflow(inf)
+        // if nan, return nan
+        return uf;
+    }
+
+    // if uf * 2overflow
+    if (exp_part == max_minus_one_exp) {
+        // return +/- inf
+        return sign_part | exp_mask;
+    }
+    // if denormalized(exp == 0 and uf *2 not denormalized)
+    if (exp_part == 0) {
+        // if not overflow to normal float
+        if (frac_part < frac_only_leftmost_1) {
+            frac_part *= 2;
+            return sign_part | frac_part;
+        }
+        // if overflow to normal case, same as normal case
+        frac_part = (frac_part << 1) & frac_mask;
+    }
+    // normal
+    // printf("%x\n", exp_part);
+    exp_part += 0x800000;
+    // printf("%x\n", exp_part);
+    return sign_part | exp_part | frac_part;
 }
 /*
  * floatFloat2Int - Return bit-level equivalent of expression (int) f
@@ -388,7 +421,52 @@ unsigned floatScale2(unsigned uf) {
  *   Rating: 4
  */
 int floatFloat2Int(unsigned uf) {
-    return 2;
+    unsigned exp_mask = 0x7f800000;
+    unsigned frac_mask = 0x007fffff;
+    // unsigned max_minus_one_exp = 0x7f000000;
+    unsigned exp_part = uf & exp_mask;
+    unsigned frac_part = uf & frac_mask;
+    unsigned sign_part = uf & 0x80000000;  // not zero means negative
+    unsigned out_of_range_ret_val = 0x80000000u;
+    unsigned exp_part_val = exp_part >> 23;
+    unsigned exp_val = exp_part_val - 127;
+    // unsigned normal_move_amount =
+    unsigned normal_val = 0;
+
+    // if +/-zero
+    // if ((uf & 0x7fffffff) == 0) {
+    //     return 0;
+    // }
+    // if abs(uf) < 1
+    // printf("%x\n", uf);
+    // printf("%d\n", exp_part_val);
+    if (exp_part_val < 127) {
+        // printf("%x\n", 1);
+        return 0;
+    }
+
+    // if out of range or uf = 0x80000000
+    if (exp_part_val >= 159) {
+        return out_of_range_ret_val;
+    }
+    // if NaN and inf
+    if ((exp_part == exp_mask)) {
+        return out_of_range_ret_val;
+    }
+    // normal case
+    if (exp_val < 23) {
+        normal_val = frac_part >> (23 - exp_val);
+    } else {
+        normal_val = frac_part << (exp_val - 23);
+    }
+    // printf("normal: %x\n", normal_val);
+    // printf("exp_val: %d\n", exp_val);
+    normal_val += 1 << exp_val;
+    // printf("normal: %d\n", normal_val);
+    if (sign_part != 0) {
+        normal_val = ~normal_val + 1;
+    }
+    return normal_val;
 }
 /*
  * floatPower2 - Return bit-level equivalent of the expression 2.0^x
@@ -404,5 +482,18 @@ int floatFloat2Int(unsigned uf) {
  *   Rating: 4
  */
 unsigned floatPower2(int x) {
-    return 2;
+    // if too small
+    // -126 - 23 = -149
+    // printf("%x\n", exp_val);
+    unsigned max_val = 255 << 23;
+    unsigned exp_val = x + 127;
+    if (x < -149) {
+        return 0;
+    } else if (x < -126) {      // if denormalized
+        return 1 << (x + 149);  // -149 << 1, -148 << 2
+    } else if (x <= 127) {      // if not overflow
+        return exp_val << 23;
+    } else {  // overflow
+        return max_val;
+    }
 }
